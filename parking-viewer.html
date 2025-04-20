@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Parking Viewer</title>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBNLrJhOMz6idD05pzwk17MCHTHkofFORE&callback=Function.prototype"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        header {
+            background-color: #fcd34d;
+            color: #000;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            margin-top: 0;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .parking-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .parking-slot {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .parking-slot:hover {
+            transform: scale(1.05);
+        }
+        .available {
+            background-color: #86efac;
+            color: #166534;
+            border: 2px solid #16a34a;
+        }
+        .occupied {
+            background-color: #fca5a5;
+            color: #991b1b;
+            border: 2px solid #dc2626;
+        }
+        .premium {
+            position: relative;
+        }
+        .premium::after {
+            content: "P";
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 10px;
+            color: gold;
+            font-weight: bold;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            flex: 1;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .booking-form {
+            display: none;
+            background-color: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid #e2e8f0;
+        }
+        .booking-form.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #fcd34d;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        button:hover {
+            background-color: #f59e0b;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-yellow {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        .badge-green {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        .badge-red {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        .refresh {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+        }
+        #connection-status {
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .connected {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        .disconnected {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        #status-spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #f59e0b;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-right: 5px;
+        }
+        @keyframes spin {
+            to {transform: rotate(360deg);}
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Smart Parking System</h1>
+        <p>Real-time parking slot availability monitoring</p>
+    </header>
+
+    <div class="container">
+        <div id="connection-status">Connecting to server...</div>
+        
+        <h2>Nakshatra Mall Parking</h2>
+        <p>385, N C Kelkar Marg, Dadar West, Mumbai, Maharashtra 400028</p>
+        
+        <div class="stats">
+            <div class="stat-card" style="background-color: #dcfce7;">
+                <h3 id="available-count">0</h3>
+                <p>Available Spots</p>
+            </div>
+            <div class="stat-card" style="background-color: #fee2e2;">
+                <h3 id="occupied-count">0</h3>
+                <p>Occupied Spots</p>
+            </div>
+            <div class="stat-card" style="background-color: #f8fafc;">
+                <h3 id="total-count">0</h3>
+                <p>Total Spots</p>
+            </div>
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button id="toggle-map-btn" class="refresh">Show/Hide Map</button>
+            <div id="map-container" style="height: 0; overflow: hidden; transition: height 0.3s ease-in-out;">
+                <div id="map" style="width: 100%; height: 300px; border-radius: 8px;"></div>
+            </div>
+        </div>
+
+        <div class="view-tabs" style="display: flex; border-bottom: 1px solid #e5e7eb; margin-bottom: 20px;">
+            <button id="grid-view-btn" class="tab-btn active" style="padding: 10px 20px; border: none; background: none; cursor: pointer; font-weight: 500; border-bottom: 2px solid transparent;">Grid View</button>
+            <button id="floor-view-btn" class="tab-btn" style="padding: 10px 20px; border: none; background: none; cursor: pointer; font-weight: 500; border-bottom: 2px solid transparent;">Floor Plan</button>
+        </div>
+
+        <div id="grid-view">
+            <button id="refresh-btn" class="refresh">
+                <span id="status-spinner"></span>
+                Refresh Data
+            </button>
+            
+            <div id="parking-grid" class="parking-grid">
+                <!-- Parking slots will be dynamically generated here -->
+            </div>
+        </div>
+
+        <div id="floor-view" style="display: none;">
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="margin-top: 0;">Parking Floor Plan</h3>
+                <p>This view shows the actual layout of the parking area. Click on a spot to select it.</p>
+            </div>
+            
+            <div id="floor-plan" style="position: relative; background-color: #f3f4f6; border-radius: 8px; padding: 20px; height: 500px; overflow: auto;">
+                <!-- Entrance/Exit -->
+                <div style="position: absolute; top: 240px; left: 10px; background-color: #bfdbfe; padding: 10px; border-radius: 4px; font-weight: bold;">
+                    ENTRANCE/EXIT
+                </div>
+                
+                <!-- Driving lanes -->
+                <div style="position: absolute; top: 100px; left: 120px; width: 80%; height: 60px; background-color: #e5e7eb;"></div>
+                <div style="position: absolute; top: 240px; left: 120px; width: 80%; height: 60px; background-color: #e5e7eb;"></div>
+                <div style="position: absolute; top: 380px; left: 120px; width: 80%; height: 60px; background-color: #e5e7eb;"></div>
+                
+                <!-- Parking spots will be generated dynamically -->
+                <div id="floor-plan-spots"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Selected Slot</h2>
+        <p id="selection-message">Click on an available parking slot to select it</p>
+        
+        <div id="booking-form" class="booking-form">
+            <h3>Book Parking Slot <span id="selected-slot-id"></span></h3>
+            
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" placeholder="Enter your name">
+            </div>
+            
+            <div class="form-group">
+                <label for="vehicle-number">Vehicle Number</label>
+                <input type="text" id="vehicle-number" placeholder="e.g., MH01AB1234">
+            </div>
+            
+            <div class="form-group">
+                <label for="vehicle-type">Vehicle Type</label>
+                <select id="vehicle-type">
+                    <option value="car">Car</option>
+                    <option value="bike">Bike</option>
+                    <option value="suv">SUV</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="mobile">Mobile Number</label>
+                <input type="text" id="mobile" placeholder="Enter 10 digit mobile number">
+            </div>
+            
+            <div class="form-group">
+                <label for="duration">Duration</label>
+                <select id="duration">
+                    <option value="1">1 Hour</option>
+                    <option value="2">2 Hours</option>
+                    <option value="3">3 Hours</option>
+                    <option value="4">4 Hours</option>
+                    <option value="day">Full Day</option>
+                </select>
+            </div>
+            
+            <button id="book-btn">Confirm Booking</button>
+        </div>
+    </div>
+
+    <div class="container" id="ticket-container" style="display: none;">
+        <h2>Your Parking Ticket</h2>
+        <div id="ticket" style="border: 2px dashed #fcd34d; padding: 20px; position: relative; background-color: #fffbeb;">
+            <div style="position: absolute; top: 10px; right: 10px; font-size: 24px; font-weight: bold; color: #fcd34d;">SpotSense</div>
+            <h3>Parking Ticket</h3>
+            <p><strong>Booking ID:</strong> <span id="ticket-id"></span></p>
+            <p><strong>Name:</strong> <span id="ticket-name"></span></p>
+            <p><strong>Vehicle Number:</strong> <span id="ticket-vehicle"></span></p>
+            <p><strong>Vehicle Type:</strong> <span id="ticket-vehicle-type"></span></p>
+            <p><strong>Slot Number:</strong> <span id="ticket-slot"></span></p>
+            <p><strong>Duration:</strong> <span id="ticket-duration"></span></p>
+            <p><strong>Entry Time:</strong> <span id="ticket-time"></span></p>
+            <p><strong>Amount Paid:</strong> <span id="ticket-amount"></span></p>
+            <div style="margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 10px; font-size: 12px;">
+                <p>Please keep this ticket safe. Show this at the exit.</p>
+                <p>Nakshatra Mall Parking, 385, N C Kelkar Marg, Dadar West, Mumbai</p>
+                <p>Contact: +91 1234567890</p>
+            </div>
+        </div>
+        <div style="margin-top: 20px; display: flex; gap: 10px;">
+            <button id="download-ticket" class="refresh">Download Ticket</button>
+            <button id="new-booking" class="refresh">New Booking</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE_URL = 'http://localhost:5001/api';
+        const WEBSOCKET_URL = 'ws://localhost:5001';
+        
+        // DOM Elements
+        const parkingGrid = document.getElementById('parking-grid');
+        const connectionStatus = document.getElementById('connection-status');
+        const availableCount = document.getElementById('available-count');
+        const occupiedCount = document.getElementById('occupied-count');
+        const totalCount = document.getElementById('total-count');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const selectionMessage = document.getElementById('selection-message');
+        const bookingForm = document.getElementById('booking-form');
+        const selectedSlotId = document.getElementById('selected-slot-id');
+        const bookBtn = document.getElementById('book-btn');
+        
+        // View tabs
+        const gridViewBtn = document.getElementById('grid-view-btn');
+        const floorViewBtn = document.getElementById('floor-view-btn');
+        const gridView = document.getElementById('grid-view');
+        const floorView = document.getElementById('floor-view');
+        const floorPlanSpots = document.getElementById('floor-plan-spots');
+        
+        // State
+        let selectedSlot = null;
+        let parkingSlots = [];
+        let isConnected = false;
+        
+        // Initialize
+        fetchParkingData();
+        setupWebSocket();
+
+        // Generate mock data immediately to ensure UI is populated
+        generateMockData();
+
+        // Add simulated real-time updates for demo purposes
+        setInterval(() => {
+            if (!isConnected) {
+                simulateRandomUpdate();
+            }
+        }, 5000);
+        
+        // Event Listeners
+        refreshBtn.addEventListener('click', fetchParkingData);
+        bookBtn.addEventListener('click', handleBooking);
+        
+        // View switching
+        gridViewBtn.addEventListener('click', function() {
+            gridView.style.display = 'block';
+            floorView.style.display = 'none';
+            gridViewBtn.classList.add('active');
+            gridViewBtn.style.borderBottom = '2px solid #fcd34d';
+            floorViewBtn.classList.remove('active');
+            floorViewBtn.style.borderBottom = '2px solid transparent';
+        });
+
+        floorViewBtn.addEventListener('click', function() {
+            gridView.style.display = 'none';
+            floorView.style.display = 'block';
+            floorViewBtn.classList.add('active');
+            floorViewBtn.style.borderBottom = '2px solid #fcd34d';
+            gridViewBtn.classList.remove('active');
+            gridViewBtn.style.borderBottom = '2px solid transparent';
+        });
+
+        // Set active tab styling
+        gridViewBtn.style.borderBottom = '2px solid #fcd34d';
+        
+        // Functions
+        function setupWebSocket() {
+            try {
+                const socket = new WebSocket(WEBSOCKET_URL);
+                
+                socket.onopen = function() {
+                    console.log('WebSocket connected');
+                    connectionStatus.textContent = 'Connected to WebSocket server';
+                    connectionStatus.classList.add('connected');
+                    connectionStatus.classList.remove('disconnected');
+                    isConnected = true;
+                    
+                    // Subscribe to parking updates
+                    socket.send(JSON.stringify({
+                        action: 'subscribe',
+                        parking_id: '1'
+                    }));
+                };
+                
+                socket.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    console.log('WebSocket data received:', data);
+                    
+                    if (data.slots) {
+                        updateParkingGrid(data.slots);
+                    }
+                };
+                
+                socket.onclose = function() {
+                    console.log('WebSocket disconnected');
+                    connectionStatus.textContent = 'Disconnected from server, retrying...';
+                    connectionStatus.classList.add('disconnected');
+                    connectionStatus.classList.remove('connected');
+                    isConnected = false;
+                    
+                    // Try to reconnect after 5 seconds
+                    setTimeout(setupWebSocket, 5000);
+                };
+                
+                socket.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    connectionStatus.textContent = 'Error connecting to server';
+                    connectionStatus.classList.add('disconnected');
+                    connectionStatus.classList.remove('connected');
+                    isConnected = false;
+                };
+            } catch (error) {
+                console.error('WebSocket setup error:', error);
+                connectionStatus.textContent = 'Could not connect to server';
+                connectionStatus.classList.add('disconnected');
+                connectionStatus.classList.remove('connected');
+                isConnected = false;
+            }
+        }
+        
+        async function fetchParkingData() {
+            try {
+                refreshBtn.disabled = true;
+                
+                // Fetch data from API
+                const response = await fetch(`${API_BASE_URL}/parking/1/slots`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Fetched parking data:', data);
+                    
+                    if (data.slots) {
+                        updateParkingGrid(data.slots);
+                        connectionStatus.textContent = 'Connected to server';
+                        connectionStatus.classList.add('connected');
+                        connectionStatus.classList.remove('disconnected');
+                    }
+                } else {
+                    // If API call fails, generate mock data
+                    generateMockData();
+                    connectionStatus.textContent = 'Using simulated data (server not responding)';
+                    connectionStatus.classList.add('disconnected');
+                    connectionStatus.classList.remove('connected');
+                }
+            } catch (error) {
+                console.error('Error fetching parking data:', error);
+                // Generate mock data
+                generateMockData();
+                connectionStatus.textContent = 'Using simulated data (cannot connect to server)';
+                connectionStatus.classList.add('disconnected');
+                connectionStatus.classList.remove('connected');
+            } finally {
+                refreshBtn.disabled = false;
+            }
+        }
+        
+        function generateMockData() {
+            // Generate mock data for display
+            const mockSlots = Array.from({ length: 70 }, (_, index) => {
+                const isOccupied = [3, 7, 10, 14, 19, 20, 22, 25, 31, 33, 39, 42, 44, 47, 50, 52, 56, 58, 60, 63, 67].includes(index);
+                return {
+                    id: String(index),
+                    status: isOccupied ? 'occupied' : 'available',
+                    position: { x: 0, y: 0 },
+                    type: index % 5 === 0 ? 'premium' : 'standard',
+                    last_updated: new Date().toISOString()
+                };
+            });
+            
+            updateParkingGrid(mockSlots);
+        }
+        
+        function updateParkingGrid(slots) {
+            // Clear previous grid
+            parkingGrid.innerHTML = '';
+            floorPlanSpots.innerHTML = '';
+            
+            // Update state
+            parkingSlots = slots;
+            
+            // Calculate totals
+            const available = slots.filter(slot => slot.status === 'available').length;
+            const occupied = slots.length - available;
+            
+            // Update counters
+            availableCount.textContent = available;
+            occupiedCount.textContent = occupied;
+            totalCount.textContent = slots.length;
+            
+            // Render slots in grid view
+            slots.forEach(slot => {
+                // Grid slots
+                const slotEl = document.createElement('div');
+                slotEl.className = `parking-slot ${slot.status}`;
+                if (slot.type === 'premium') {
+                    slotEl.classList.add('premium');
+                }
+                slotEl.textContent = slot.id;
+                slotEl.dataset.id = slot.id;
+                slotEl.dataset.status = slot.status;
+                
+                slotEl.addEventListener('click', () => handleSlotSelect(slot));
+                
+                parkingGrid.appendChild(slotEl);
+                
+                // Floor plan slots
+                const spotSize = 50;
+                const spotMargin = 10;
+                const spotsPerRow = 10;
+                
+                // Calculate position (arrange in rows of 10)
+                const slotId = parseInt(slot.id);
+                const rowIndex = Math.floor(slotId / spotsPerRow);
+                const colIndex = slotId % spotsPerRow;
+                
+                // Alternate rows face opposite directions
+                const isEvenRow = rowIndex % 2 === 0;
+                
+                // Calculate top position (adjust for driving lanes)
+                let topPos = rowIndex * (spotSize + spotMargin);
+                if (rowIndex > 0) topPos += 60; // Add lane height
+                if (rowIndex > 2) topPos += 60; // Add another lane height
+                
+                // Calculate left position
+                let leftPos = isEvenRow 
+                    ? colIndex * (spotSize + spotMargin) + 120 // Even rows start from left
+                    : (9 - colIndex) * (spotSize + spotMargin) + 120; // Odd rows start from right
+                
+                const floorSlot = document.createElement('div');
+                floorSlot.className = `floor-slot ${slot.status}`;
+                if (slot.type === 'premium') {
+                    floorSlot.classList.add('premium');
+                }
+                floorSlot.textContent = slot.id;
+                floorSlot.dataset.id = slot.id;
+                floorSlot.style.position = 'absolute';
+                floorSlot.style.top = `${topPos}px`;
+                floorSlot.style.left = `${leftPos}px`;
+                floorSlot.style.width = `${spotSize}px`;
+                floorSlot.style.height = `${spotSize}px`;
+                floorSlot.style.backgroundColor = slot.status === 'available' ? '#86efac' : '#fca5a5';
+                floorSlot.style.border = slot.status === 'available' ? '2px solid #16a34a' : '2px solid #dc2626';
+                floorSlot.style.borderRadius = '4px';
+                floorSlot.style.display = 'flex';
+                floorSlot.style.alignItems = 'center';
+                floorSlot.style.justifyContent = 'center';
+                floorSlot.style.cursor = 'pointer';
+                floorSlot.style.fontWeight = 'bold';
+                floorSlot.style.zIndex = '1';
+                
+                // If premium, add indicator
+                if (slot.type === 'premium') {
+                    floorSlot.innerHTML = `${slot.id}<span style="position: absolute; top: 2px; right: 2px; font-size: 10px; color: gold;">P</span>`;
+                }
+                
+                floorSlot.addEventListener('click', () => handleSlotSelect(slot));
+                
+                floorPlanSpots.appendChild(floorSlot);
+            });
+            
+            // Check if previously selected slot is still available
+            if (selectedSlot) {
+                const slot = slots.find(s => s.id === selectedSlot.id);
+                if (!slot || slot.status !== 'available') {
+                    // Deselect if no longer available
+                    selectedSlot = null;
+                    selectionMessage.textContent = 'Previously selected slot is no longer available. Please select another.';
+                    bookingForm.classList.remove('active');
+                } else {
+                    // Highlight selected slot in both views
+                    highlightSelectedSlot(selectedSlot.id);
+                }
+            }
+        }
+        
+        function handleSlotSelect(slot) {
+            if (slot.status === 'occupied') {
+                alert('This slot is already occupied');
+                return;
+            }
+            
+            selectedSlot = slot;
+            selectionMessage.textContent = `You've selected slot #${slot.id}`;
+            selectedSlotId.textContent = slot.id;
+            bookingForm.classList.add('active');
+            
+            // Highlight selected slot in both views
+            highlightSelectedSlot(slot.id);
+        }
+        
+        function handleBooking() {
+            const name = document.getElementById('name').value;
+            const vehicleNumber = document.getElementById('vehicle-number').value;
+            const vehicleType = document.getElementById('vehicle-type').value;
+            const mobile = document.getElementById('mobile').value;
+            const duration = document.getElementById('duration').value;
+            
+            // Simple validation
+            if (!name || !vehicleNumber || !mobile) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            if (mobile.length !== 10 || isNaN(mobile)) {
+                alert('Please enter a valid 10-digit mobile number');
+                return;
+            }
+            
+            if (vehicleNumber.length < 5) {
+                alert('Please enter a valid vehicle number');
+                return;
+            }
+            
+            // Store the slot ID before we reset selectedSlot
+            const slotId = selectedSlot.id;
+            const isVIP = parkingSlots.find(s => s.id === slotId)?.type === 'premium';
+            
+            // Prepare booking data
+            const durationMap = {
+                '1': '1 Hour',
+                '2': '2 Hours',
+                '3': '3 Hours',
+                '4': '4 Hours',
+                'day': 'Full Day'
+            };
+            
+            const bookingData = {
+                ticketId: generateTicketId(),
+                name: document.getElementById('name').value,
+                vehicleNumber: document.getElementById('vehicle-number').value,
+                vehicleType: document.getElementById('vehicle-type').value,
+                slotId: slotId,
+                duration: document.getElementById('duration').value,
+                durationText: durationMap[document.getElementById('duration').value],
+                entryTime: formatTime(new Date()),
+                amount: calculateAmount(document.getElementById('duration').value, isVIP)
+            };
+            
+            // Generate ticket instead of showing alert
+            generateTicket(bookingData);
+            
+            // Update the slot as occupied in our UI
+            const slotElement = document.querySelector(`.parking-slot[data-id="${slotId}"]`);
+            if (slotElement) {
+                slotElement.classList.remove('available');
+                slotElement.classList.add('occupied');
+                slotElement.dataset.status = 'occupied';
+                
+                // Also update our state
+                const slot = parkingSlots.find(s => s.id === slotId);
+                if (slot) {
+                    slot.status = 'occupied';
+                }
+                
+                // Update counts
+                const available = parkingSlots.filter(slot => slot.status === 'available').length;
+                const occupied = parkingSlots.length - available;
+                availableCount.textContent = available;
+                occupiedCount.textContent = occupied;
+            }
+            
+            // Reset form
+            document.getElementById('name').value = '';
+            document.getElementById('vehicle-number').value = '';
+            document.getElementById('vehicle-type').value = 'car';
+            document.getElementById('mobile').value = '';
+            document.getElementById('duration').value = '1';
+            
+            bookingForm.classList.remove('active');
+            selectionMessage.textContent = 'Booking completed! Select another slot to book again.';
+            selectedSlot = null;
+        }
+
+        function simulateRandomUpdate() {
+            if (parkingSlots.length === 0) return;
+            
+            // Create a deep copy of the slots
+            const updatedSlots = JSON.parse(JSON.stringify(parkingSlots));
+            
+            // Change status of 1-3 random slots
+            const numChanges = Math.floor(Math.random() * 3) + 1;
+            
+            for (let i = 0; i < numChanges; i++) {
+                const randomIndex = Math.floor(Math.random() * updatedSlots.length);
+                const slot = updatedSlots[randomIndex];
+                slot.status = slot.status === 'available' ? 'occupied' : 'available';
+                slot.last_updated = new Date().toISOString();
+            }
+            
+            updateParkingGrid(updatedSlots);
+            
+            connectionStatus.textContent = 'Using simulated data with random updates';
+            connectionStatus.classList.add('disconnected');
+            connectionStatus.classList.remove('connected');
+        }
+
+        function generateTicketId() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let ticketId = 'TKT-';
+            for (let i = 0; i < 8; i++) {
+                ticketId += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return ticketId;
+        }
+
+        function calculateAmount(duration, isVIP) {
+            // Base hourly rate
+            const hourlyRate = 40;
+            const vipMultiplier = 1.5;
+            
+            if (duration === 'day') {
+                return isVIP ? 300 : 200;
+            }
+            
+            const hours = parseInt(duration);
+            return hourlyRate * hours * (isVIP ? vipMultiplier : 1);
+        }
+
+        function formatTime(date) {
+            return date.toLocaleString('en-IN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        function generateTicket(bookingData) {
+            const ticketContainer = document.getElementById('ticket-container');
+            ticketContainer.style.display = 'block';
+            
+            // Fill ticket details
+            document.getElementById('ticket-id').textContent = bookingData.ticketId;
+            document.getElementById('ticket-name').textContent = bookingData.name;
+            document.getElementById('ticket-vehicle').textContent = bookingData.vehicleNumber;
+            document.getElementById('ticket-vehicle-type').textContent = bookingData.vehicleType;
+            document.getElementById('ticket-slot').textContent = bookingData.slotId;
+            document.getElementById('ticket-duration').textContent = bookingData.durationText;
+            document.getElementById('ticket-time').textContent = bookingData.entryTime;
+            document.getElementById('ticket-amount').textContent = `₹${bookingData.amount}`;
+            
+            // Scroll to ticket
+            ticketContainer.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function downloadTicket() {
+            const ticketElement = document.getElementById('ticket');
+            
+            // Create a temporary div for printing
+            const printContent = ticketElement.cloneNode(true);
+            printContent.style.width = '100%';
+            printContent.style.maxWidth = '500px';
+            printContent.style.margin = '0 auto';
+            printContent.style.padding = '20px';
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write('<html><head><title>Parking Ticket</title>');
+            printWindow.document.write('<style>body { font-family: Arial, sans-serif; }</style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(printContent.outerHTML);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            
+            printWindow.onload = function() {
+                printWindow.print();
+                printWindow.close();
+            };
+        }
+
+        // Add event listeners for the new buttons
+        document.getElementById('download-ticket').addEventListener('click', downloadTicket);
+        document.getElementById('new-booking').addEventListener('click', function() {
+            document.getElementById('ticket-container').style.display = 'none';
+            selectionMessage.textContent = 'Select another slot to book again.';
+        });
+
+        // Map functionality
+        let map;
+        let marker;
+        const mapContainer = document.getElementById('map-container');
+        const toggleMapBtn = document.getElementById('toggle-map-btn');
+        let isMapVisible = false;
+
+        toggleMapBtn.addEventListener('click', function() {
+            if (isMapVisible) {
+                mapContainer.style.height = '0';
+                isMapVisible = false;
+            } else {
+                mapContainer.style.height = '300px';
+                isMapVisible = true;
+                
+                // Initialize map if it doesn't exist
+                if (!map) {
+                    initMap();
+                }
+            }
+        });
+
+        function initMap() {
+            // Nakshatra Mall coordinates
+            const parkingLocation = { lat: 19.0243, lng: 72.8432 };
+            
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: parkingLocation,
+                zoom: 15,
+                mapTypeId: google.maps.MapTypeId.ROADMAP,
+                mapTypeControl: false,
+                streetViewControl: false
+            });
+            
+            marker = new google.maps.Marker({
+                position: parkingLocation,
+                map: map,
+                title: 'Nakshatra Mall Parking',
+                animation: google.maps.Animation.DROP
+            });
+            
+            // Info window
+            const infoContent = `
+                <div style="padding: 10px;">
+                    <h3 style="margin-top: 0;">Nakshatra Mall Parking</h3>
+                    <p>385, N C Kelkar Marg, Dadar West, Mumbai</p>
+                    <p>Operating hours: 06:00 AM - 11:00 PM</p>
+                    <p><a href="https://maps.google.com/maps?daddr=19.0243,72.8432" target="_blank">Get Directions</a></p>
+                </div>
+            `;
+            
+            const infoWindow = new google.maps.InfoWindow({
+                content: infoContent
+            });
+            
+            marker.addListener('click', () => {
+                infoWindow.open(map, marker);
+            });
+            
+            // Open info window by default
+            infoWindow.open(map, marker);
+        }
+
+        // Highlight selected slot in both views
+        function highlightSelectedSlot(slotId) {
+            // Highlight in grid view
+            document.querySelectorAll('.parking-slot').forEach(el => {
+                el.style.border = el.dataset.id === slotId ? '3px solid blue' : '';
+            });
+            
+            // Highlight in floor plan view
+            document.querySelectorAll('.floor-slot').forEach(el => {
+                if (el.dataset.id === slotId) {
+                    el.style.border = '3px solid blue';
+                    el.style.boxShadow = '0 0 10px rgba(0, 0, 255, 0.5)';
+                    
+                    // Scroll to the selected slot in floor plan
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        }
+    </script>
+</body>
+</html> 
