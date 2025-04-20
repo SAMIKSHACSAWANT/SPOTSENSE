@@ -482,6 +482,7 @@ const ParkingSlotPage = () => {
             id: parkingId,
             name: 'Central Mall Parking',
             address: '123 Main Street, City Center',
+            coordinates: [19.1136, 72.8697], // Mumbai coordinates for the exact parking lot
             totalSlots: 40,
             availableSlots: 15,
             rates: {
@@ -512,6 +513,7 @@ const ParkingSlotPage = () => {
           id: parkingId,
           name: 'Central Mall Parking',
           address: '123 Main Street, City Center',
+          coordinates: [19.1136, 72.8697], // Mumbai coordinates for the exact parking lot
           totalSlots: 40,
           availableSlots: 15,
           rates: {
@@ -557,42 +559,57 @@ const ParkingSlotPage = () => {
   };
 
   const handleGetDirections = () => {
+    // Make sure we have parking details with coordinates
+    if (!parkingDetails || !parkingDetails.coordinates) {
+      toast.error("Parking location coordinates are not available");
+      return;
+    }
+    
+    // Format the destination with name and address if available
+    let destination;
+    if (parkingDetails.name && parkingDetails.address) {
+      // Use the name and address for more accurate directions
+      destination = `${parkingDetails.name}, ${parkingDetails.address}`;
+    } else {
+      // Fallback to coordinates
+      destination = `${parkingDetails.coordinates[0]},${parkingDetails.coordinates[1]}`;
+    }
+    
     // Try to get user's current location for better directions
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const origin = `${position.coords.latitude},${position.coords.longitude}`;
-          const destination = `${parkingDetails.coordinates[0]},${parkingDetails.coordinates[1]}`;
           
           // Open Google Maps with directions from current location to parking
           window.open(
-            `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`,
+            `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${encodeURIComponent(destination)}&travelmode=driving`,
             '_blank'
           );
           
-          toast.success("Directions loaded with your current location");
+          toast.success(`Directions to ${parkingDetails.name} loaded with your current location`);
         },
         (error) => {
           console.error("Error getting user location:", error);
           
           // Fallback to just opening the destination
           window.open(
-            `https://www.google.com/maps/dir/?api=1&destination=${parkingDetails.coordinates[0]},${parkingDetails.coordinates[1]}`,
+            `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`,
             '_blank'
           );
           
-          toast.info("Using default directions without your current location");
+          toast.info(`Showing directions to ${parkingDetails.name} without your current location`);
         },
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
     } else {
       // Browser doesn't support geolocation
       window.open(
-        `https://www.google.com/maps/search/?api=1&query=${parkingDetails.coordinates[0]},${parkingDetails.coordinates[1]}`,
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`,
         '_blank'
       );
       
-      toast.warning("Your browser doesn't support geolocation");
+      toast.warning(`Showing location of ${parkingDetails.name} - your browser doesn't support geolocation`);
     }
   };
 

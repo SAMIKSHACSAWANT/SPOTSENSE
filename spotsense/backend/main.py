@@ -17,6 +17,7 @@ print("main")
 carparkpos_path = os.path.join(os.path.dirname(__file__), 'CarParkPos')
 uniqueid_path = os.path.join(os.path.dirname(__file__), 'UniqueID')
 
+
 # API configuration
 API_BASE_URL = "http://localhost:5000/api"
 last_api_update = {}  # Track last update time for each slot

@@ -45,3 +45,9 @@ echo You can now use start-all.bat to run the application.
 echo ================================================
 
 pause 
+
+git init 
+git add . 
+git commit -m "Initial commit" 
+git remote add origin https://github.com/SAMICSAWANT/codeparking.git 
+git push -u origin main 
